@@ -2,6 +2,7 @@
 #include "defs.h"
 #include "loader.h"
 #include "trap.h"
+#include "timer.h"
 
 struct proc pool[NPROC];
 char kstack[NPROC][PAGE_SIZE];
@@ -34,6 +35,9 @@ void proc_init(void)
 		/*
 		* LAB1: you may need to initialize your new fields of proc here
 		*/
+		memset(&p->taskinfo, 0, sizeof(p->taskinfo));
+		p->starttime = 0;
+		p->firstaccess = 1;
 	}
 	idle.kstack = (uint64)boot_stack_top;
 	idle.pid = 0;
@@ -84,6 +88,13 @@ void scheduler(void)
 				/*
 				* LAB1: you may need to init proc start time here
 				*/
+				if(p->firstaccess)
+				{
+					p->starttime = get_cycle();
+					p->firstaccess = 0;
+				}
+				p->taskinfo.status = Running;
+
 				p->state = RUNNING;
 				current_proc = p;
 				swtch(&idle.context, &p->context);

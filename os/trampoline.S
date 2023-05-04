@@ -25,7 +25,7 @@ uservec:
         #
 
 	# swap a0 and sscratch
-        # so that a0 is TRAPFRAME
+        # so that a0 is trapframe
         csrrw a0, sscratch, a0
 
         # save the user registers in TRAPFRAME
@@ -73,7 +73,7 @@ uservec:
         # csrw satp, t1
         # sfence.vma zero, zero
         ld t0, 16(a0)
-        jr t0
+        jr t0 # jump to usertrap
 
 .globl userret
 userret:
@@ -84,8 +84,8 @@ userret:
         # a1: user page table, for satp.
 
         # switch to the user page table.
-        csrw satp, a1
-        sfence.vma zero, zero
+        #csrw satp, a1
+        #sfence.vma zero, zero
 
         # put the saved user a0 in sscratch, so we
         # can swap it with our a0 (TRAPFRAME) in the last step.

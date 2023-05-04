@@ -17,7 +17,7 @@ void main()
 	proc_init();
 	loader_init();
 	trap_init();
-	timer_init();
+	timer_init(); // time
 	run_all_app();
 	infof("start scheduler!");
 	scheduler();
