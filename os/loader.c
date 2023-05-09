@@ -81,6 +81,8 @@ int bin_loader(uint64 start, uint64 end, struct proc *p)
 	p->state = RUNNABLE;
 	p->firstaccess = 1;
 	p->taskinfo.status = Ready;
+	p->stride = 0;
+	p->priority = 16;
 	return 0;
 }
 

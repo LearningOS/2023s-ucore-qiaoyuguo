@@ -52,6 +52,7 @@ typedef struct MapInfo{
 	unsigned long long length;	
 }MapInfo;
 
+#define BIG_STRIDE 65536
 // Per-process state
 struct proc {
 	enum procstate state; // Process state
@@ -71,6 +72,8 @@ struct proc {
 	MapInfo map[MAX_MAP];
 	uint64 startime;
 	int firstaccess;
+	int stride;
+	int priority;
 };
 
 int cpuid();

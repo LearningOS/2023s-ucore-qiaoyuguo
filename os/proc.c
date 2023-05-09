@@ -48,10 +48,35 @@ int allocpid()
 
 struct proc *fetch_task()
 {
+	int index = -1;
+	int min = 0x7fffffff;
+	int qindex = task_queue.front;
+	int i;
+	for(i = task_queue.front; i != task_queue.tail; i = (i + 1) % NPROC) { 
+		int n = task_queue.data[i];
+		if(pool[n].stride < min) {
+			qindex = i;
+			index = n;
+			min = pool[n].stride;
+		}
+	}
+#if 0
 	int index = pop_queue(&task_queue);
+#endif
+
 	if (index < 0) {
 		debugf("No task to fetch\n");
 		return NULL;
+	}
+	if(qindex == task_queue.front) {
+		task_queue.front = (task_queue.front + 1) % NPROC;
+		if(task_queue.front == task_queue.tail) {
+			task_queue.empty = 1;
+		}
+	}
+	else {
+		task_queue.data[qindex] = task_queue.data[task_queue.front];
+		task_queue.front = (task_queue.front + 1) % NPROC;
 	}
 	debugf("fetch task %d(pid=%d) to task queue\n", index, pool[index].pid);
 	return pool + index;
@@ -125,6 +150,7 @@ void scheduler()
 		tracef("swtich to proc %d", p - pool);
 		p->state = RUNNING;
 		p->taskinfo.status = Running;
+		p->stride += BIG_STRIDE / p->priority;
 		if(p->firstaccess)
 		{
 			p->firstaccess = 0;

@@ -215,9 +215,12 @@ uint64 sys_spawn(uint64 va)
 	return np->pid;
 }
 
-uint64 sys_set_priority(long long prio){
-    // TODO: your job is to complete the sys call
-    return -1;
+uint64 sys_set_priority(int prio){
+	if(prio < 2 )
+		return -1;
+	struct proc *p = curr_proc();
+	p->priority = prio;
+    return 0;
 }
 
 
@@ -290,6 +293,9 @@ void syscall()
 		break;
 	case SYS_munmap:
 		ret = sys_munmap((void*)args[0], (unsigned long long)args[1]);
+		break;
+	case SYS_setpriority:
+		ret = sys_set_priority(args[0]);
 		break;
 	default:
 		ret = -1;
