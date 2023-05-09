@@ -46,6 +46,12 @@ typedef struct TaskInfo{
 	int time;
 }TaskInfo;
 
+#define MAX_MAP 5
+typedef struct MapInfo{
+	uint64 start;
+	unsigned long long length;	
+}MapInfo;
+
 // Per-process state
 struct proc {
 	enum procstate state; // Process state
@@ -62,6 +68,7 @@ struct proc {
 	uint64 program_brk;
 	uint64 heap_bottom;
 	TaskInfo taskinfo;
+	MapInfo map[MAX_MAP];
 	uint64 startime;
 	int firstaccess;
 };
@@ -84,5 +91,6 @@ int fdalloc(struct file *);
 void swtch(struct context *, struct context *);
 
 int growproc(int n);
+int munmap(void* start, unsigned long long len);
 
 #endif // PROC_H

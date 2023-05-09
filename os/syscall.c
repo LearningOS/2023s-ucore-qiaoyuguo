@@ -71,32 +71,27 @@ int sys_mmap(void* start, unsigned long long len, int port, int flag, int fd)
 		tmp += PGSIZE;	
 	}
 
-	return 0;
-}
-int sys_munmap(void* start, unsigned long long len)
-{
-	debugf("under sys_munmap, start=0x%x len=%d",
-		   	(uint64)start, len);
-	struct proc *p = curr_proc();
-
-	int pages = ((len + PGSIZE - 1) >> PGSHIFT);
-	uint64 end = (uint64)(start + (pages << PGSHIFT));
-	uint64 tmp = (uint64)start;
-	debugf("Starting to try to unmap %d pages from 0x%x", pages, (uint64)start);
-	while(tmp < end)
+	int map_index = -1;
+	for(int i = 0; i < NELEM(p->map); i++)
 	{
-		if(walkaddr(p->pagetable, tmp) == 0)
+		if(p->map[i].start == 0)
 		{
-			debugf("0x%x is not mapped yet", tmp);
-			return -1;
+			map_index = i;
+			break;
 		}
-		uvmunmap(p->pagetable, tmp, 1, 1);
-		tmp += PGSIZE;
+	}
+	if(map_index != -1)
+	{
+		p->map[map_index].start = (uint64)start;
+		p->map[map_index].length = len;
 	}
 
 	return 0;
 }
-
+int sys_munmap(void* start, unsigned long long len)
+{
+	return munmap(start, len);
+}
 static int get_execute_time(void)
 {
 	int execute_time = 0;
@@ -108,8 +103,7 @@ static int get_execute_time(void)
 }
 
 int sys_task_info(TaskInfo *t)
-{
-	struct proc *p = curr_proc();	
+{ struct proc *p = curr_proc();	
 	p->taskinfo.time = get_execute_time();
 
 	debugf("taskinfo time = %d", p->taskinfo.time);

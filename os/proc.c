@@ -90,6 +90,7 @@ found:
 	memset(&p->context, 0, sizeof(p->context));
 	memset((void *)p->kstack, 0, KSTACK_SIZE);
 	memset((void *)p->trapframe, 0, TRAP_PAGE_SIZE);
+	memset(&p->taskinfo, 0, sizeof(p->taskinfo));
 	p->context.ra = (uint64)usertrapret;
 	p->context.sp = p->kstack + KSTACK_SIZE;
 	return p;
@@ -167,10 +168,56 @@ void freepagetable(pagetable_t pagetable, uint64 max_page)
 	uvmfree(pagetable, max_page);
 }
 
+int munmap(void* start, unsigned long long len)
+{
+	debugf("under sys_munmap, start=0x%x len=%d",
+		   	(uint64)start, len);
+	struct proc *p = curr_proc();
+
+	int pages = ((len + PGSIZE - 1) >> PGSHIFT);
+	uint64 end = (uint64)(start + (pages << PGSHIFT));
+	uint64 tmp = (uint64)start;
+	debugf("Starting to try to unmap %d pages from 0x%x", pages, (uint64)start);
+	while(tmp < end)
+	{
+		if(walkaddr(p->pagetable, tmp) == 0)
+		{
+			debugf("0x%x is not mapped yet", tmp);
+			return -1;
+		}
+		uvmunmap(p->pagetable, tmp, 1, 1);
+		tmp += PGSIZE;
+	}
+
+	int map_index = -1;
+	for(int i = 0; i < NELEM(p->map); i++)
+	{
+		if(p->map[i].start == (uint64)start)
+		{
+			map_index = i;
+			break;
+		}
+	}
+	if(map_index != -1)
+	{
+		p->map[map_index].start = 0;
+		p->map[map_index].length = 0;
+	}
+	return 0;
+}
 void freeproc(struct proc *p)
 {
 	if (p->pagetable)
+	{
+		for(int i = 0; i < NELEM(p->map); i++)
+		{
+			if(p->map[i].start != 0)
+			{
+				munmap((void*)(p->map[i].start), p->map[i].length);
+			}
+		}
 		freepagetable(p->pagetable, p->max_page);
+	}
 	p->pagetable = 0;
 	p->state = UNUSED;
 }
