@@ -216,11 +216,12 @@ uint64 sys_spawn(uint64 va)
 }
 
 uint64 sys_set_priority(int prio){
+	debugf("prio:%d %x", prio, prio);
 	if(prio < 2 )
 		return -1;
 	struct proc *p = curr_proc();
 	p->priority = prio;
-    return 0;
+    return prio;
 }
 
 
