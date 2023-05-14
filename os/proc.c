@@ -52,11 +52,34 @@ int allocpid()
 
 struct proc *fetch_task()
 {
-	int index = pop_queue(&task_queue);
+	int index = -1;
+	int min = 0x7fffffff;
+	int qindex = task_queue.front;
+	int i;
+	for(i = task_queue.front; i != task_queue.tail; i = (i + 1) % NPROC) { 
+		int n = task_queue.data[i];
+		if(pool[n].stride < min) {
+			qindex = i;
+			index = n;
+			min = pool[n].stride;
+		}
+	}
 	if (index < 0) {
 		debugf("No task to fetch\n");
 		return NULL;
 	}
+
+	if(qindex == task_queue.front) {
+		task_queue.front = (task_queue.front + 1) % NPROC;
+		if(task_queue.front == task_queue.tail) {
+			task_queue.empty = 1;
+		}
+	}
+	else {
+		task_queue.data[qindex] = task_queue.data[task_queue.front];
+		task_queue.front = (task_queue.front + 1) % NPROC;
+	}
+
 	debugf("fetch task %d(pid=%d) from task queue\n", index,
 	       pool[index].pid);
 	return pool + index;
@@ -91,7 +114,7 @@ found:
 	p->exit_code = 0;
 	p->pagetable = uvmcreate((uint64)p->trapframe);
 	p->program_brk = 0;
-        p->heap_bottom = 0;
+	p->heap_bottom = 0;
 	memset(&p->context, 0, sizeof(p->context));
 	memset((void *)p->kstack, 0, KSTACK_SIZE);
 	memset((void *)p->trapframe, 0, TRAP_PAGE_SIZE);
@@ -140,6 +163,7 @@ void scheduler()
 		}
 		tracef("swtich to proc %d", p - pool);
 		p->state = RUNNING;
+		p->stride += BIG_STRIDE / p->priority;
 		current_proc = p;
 		swtch(&idle.context, &p->context);
 	}
@@ -177,12 +201,59 @@ void freepagetable(pagetable_t pagetable, uint64 max_page)
 	uvmfree(pagetable, max_page);
 }
 
+int munmap(void* start, unsigned long long len)
+{
+	debugf("under sys_munmap, start=0x%x len=%d",
+		   	(uint64)start, len);
+	struct proc *p = curr_proc();
+
+	int pages = ((len + PGSIZE - 1) >> PGSHIFT);
+	uint64 end = (uint64)(start + (pages << PGSHIFT));
+	uint64 tmp = (uint64)start;
+	debugf("Starting to try to unmap %d pages from 0x%x", pages, (uint64)start);
+	while(tmp < end)
+	{
+		if(walkaddr(p->pagetable, tmp) == 0)
+		{
+			debugf("0x%x is not mapped yet", tmp);
+			return -1;
+		}
+		uvmunmap(p->pagetable, tmp, 1, 1);
+		tmp += PGSIZE;
+	}
+
+	int map_index = -1;
+	for(int i = 0; i < NELEM(p->map); i++)
+	{
+		if(p->map[i].start == (uint64)start)
+		{
+			map_index = i;
+			break;
+		}
+	}
+	if(map_index != -1)
+	{
+		p->map[map_index].start = 0;
+		p->map[map_index].length = 0;
+	}
+	return 0;
+}
+
 void freeproc(struct proc *p)
 {
 	if (p->pagetable)
-		freepagetable(p->pagetable, p->max_page);
+	{
+		for(int i = 0; i < NELEM(p->map); i++)
+		{
+			if(p->map[i].start != 0)
+			{
+				munmap((void*)(p->map[i].start), p->map[i].length);
+			}
+		}
+ 		freepagetable(p->pagetable, p->max_page);
+	}
 	p->pagetable = 0;
-	for (int i = 0; i > FD_BUFFER_SIZE; i++) {
+	for (int i = 0; i < FD_BUFFER_SIZE; i++) {
 		if (p->files[i] != NULL) {
 			fileclose(p->files[i]);
 		}

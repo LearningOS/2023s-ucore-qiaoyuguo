@@ -31,6 +31,94 @@ uint64 console_read(uint64 va, uint64 len)
 	return len;
 }
 
+
+int sys_mmap(void* start, unsigned long long len, int port, int flag, int fd)
+{
+	debugf("under sys_mmap, start=0x%x len=%d port=0x%x flag=0x%x, fd=%d",
+		   	(uint64)start, len, port, flag, fd);
+	struct proc *p = curr_proc();
+	if((port & ~0x7) != 0)
+	{
+		debugf("port bits other than least 3 bits are set, port = 0x%x", port);
+		return -1;
+	}
+	if((port & 0x7) == 0)
+	{
+		debugf("all lowest 3 bits of port are 0");
+		return -1;
+	}
+	if(!PGALIGNED((uint64)start))
+	{
+		debugf("0x%x is not aligned to page address", (uint64)start);
+		return -1;
+	}
+	
+	if(len == 0)
+		return 0;
+	if(len > 0x1000000000ULL)
+	{
+		debugf("len:%d is too big", len);
+		return -1;
+	}
+	int pages = ((len + PGSIZE - 1) >> PGSHIFT);
+	debugf("checking if %d pages from 0x%x is already mapped", pages, start);
+	uint64 end = (uint64)(start + (pages << PGSHIFT));
+	uint64 tmp = (uint64)start;
+	while(tmp < end)
+	{
+		if(walkaddr(p->pagetable, tmp) != 0)
+		{
+			debugf("tmp(0x%x) is already mapped", tmp);
+			return -1;
+		}
+		tmp += PGSIZE;
+	}
+
+	(void)fd;
+	(void)flag;
+	debugf("Starting to allocate and map %d pages", pages);
+	tmp = (uint64)start;
+	while(tmp < end)
+	{
+		uint64 phyaddr = (uint64)kalloc();
+		if(phyaddr == 0)
+		{
+			debugf("Failed to allocate new page");
+			return -1;
+		}
+		debugf("allocate page from kernel successfully");
+		if(-1 == mappages(p->pagetable, tmp, PGSIZE, phyaddr, PTE_U | (port << 1)))
+		{
+			debugf("Failed to map new page to 0x%x", tmp);
+			return -1;
+		}
+		debugf("map allocated page to 0x%x successfully", tmp);
+		tmp += PGSIZE;	
+	}
+
+	int map_index = -1;
+	for(int i = 0; i < NELEM(p->map); i++)
+	{
+		if(p->map[i].start == 0)
+		{
+			map_index = i;
+			break;
+		}
+	}
+	if(map_index != -1)
+	{
+		p->map[map_index].start = (uint64)start;
+		p->map[map_index].length = len;
+	}
+
+	return 0;
+}
+
+int sys_munmap(void* start, unsigned long long len)
+{
+	return munmap(start, len);
+}
+
 uint64 sys_write(int fd, uint64 va, uint64 len)
 {
 	if (fd < 0 || fd > FD_BUFFER_SIZE)
@@ -38,7 +126,7 @@ uint64 sys_write(int fd, uint64 va, uint64 len)
 	struct proc *p = curr_proc();
 	struct file *f = p->files[fd];
 	if (f == NULL) {
-		errorf("invalid fd %d\n", fd);
+		errorf("invalid fd %d write\n", fd);
 		return -1;
 	}
 	switch (f->type) {
@@ -58,7 +146,7 @@ uint64 sys_read(int fd, uint64 va, uint64 len)
 	struct proc *p = curr_proc();
 	struct file *f = p->files[fd];
 	if (f == NULL) {
-		errorf("invalid fd %d\n", fd);
+		errorf("invalid fd %d read\n", fd);
 		return -1;
 	}
 	switch (f->type) {
@@ -144,14 +232,40 @@ uint64 sys_wait(int pid, uint64 va)
 
 uint64 sys_spawn(uint64 va)
 {
-	// TODO: your job is to complete the sys call
-	return -1;
+	struct inode *ip;
+	struct proc *p = curr_proc();
+	char name[200] = "";
+	copyinstr(p->pagetable, name, va, 200);
+
+	if ((ip = namei(name)) == 0) {
+		errorf("invalid file name %s\n", name);
+		return -1;
+	}
+	struct proc *np = allocproc();
+	init_stdio(np);
+	if (np == NULL) {
+		panic("allocproc\n");
+	}
+	debugf("load proc %s", name);
+	bin_loader(ip, np);
+	iput(ip);
+	char *argv[2];
+	argv[0] = name;
+	argv[1] = NULL;
+	np->trapframe->a0 = push_argv(np, argv);
+	np->parent = p;
+	add_task(np);
+	return np->pid;
 }
 
 uint64 sys_set_priority(long long prio)
 {
-	// TODO: your job is to complete the sys call
-	return -1;
+	debugf("prio:%d %x", prio, prio);
+	if(prio < 2 )
+		return -1;
+	struct proc *p = curr_proc();
+	p->priority = prio;
+    return prio;
 }
 
 uint64 sys_openat(uint64 va, uint64 omode, uint64 _flags)
@@ -169,7 +283,7 @@ uint64 sys_close(int fd)
 	struct proc *p = curr_proc();
 	struct file *f = p->files[fd];
 	if (f == NULL) {
-		errorf("invalid fd %d", fd);
+		errorf("invalid fd %d close", fd);
 		return -1;
 	}
 	fileclose(f);
@@ -267,6 +381,15 @@ void syscall()
 		break;
 	case SYS_sbrk:
 		ret = sys_sbrk(args[0]);
+		break;
+	case SYS_setpriority:
+		ret = sys_set_priority(args[0]);
+		break;
+	case SYS_mmap:
+		ret = sys_mmap((void*)args[0], (unsigned long long)args[1], (int)args[2], (int)args[3], (int)args[4]);
+		break;
+	case SYS_munmap:
+		ret = sys_munmap((void*)args[0], (unsigned long long)args[1]);
 		break;
 	default:
 		ret = -1;

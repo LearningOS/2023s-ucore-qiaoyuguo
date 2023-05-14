@@ -31,6 +31,14 @@ struct context {
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+#define MAX_MAP 5
+typedef struct MapInfo{
+	uint64 start;
+	unsigned long long length;	
+}MapInfo;
+
+#define BIG_STRIDE 65536
+
 // Per-process state
 struct proc {
 	enum procstate state; // Process state
@@ -47,6 +55,9 @@ struct proc {
 		[FD_BUFFER_SIZE]; //File descriptor table, using to record the files opened by the process
 	uint64 program_brk;
 	uint64 heap_bottom;
+	MapInfo map[MAX_MAP];
+	int stride;
+	int priority;
 };
 
 int cpuid();
@@ -69,5 +80,6 @@ int push_argv(struct proc *, char **);
 void swtch(struct context *, struct context *);
 
 int growproc(int n);
+int munmap(void* start, unsigned long long len);
 
 #endif // PROC_H
