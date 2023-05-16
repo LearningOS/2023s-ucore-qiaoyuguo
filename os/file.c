@@ -154,3 +154,56 @@ uint64 inoderead(struct file *f, uint64 va, uint64 len)
 		f->off += r;
 	return r;
 }
+
+int linkat(char *oldpath, char *newpath)
+{
+	struct inode *ip, *dp, *nip;
+	dp = root_dir();
+	ivalid(dp);
+
+	if((nip = dirlookup(dp, newpath, 0)) != 0) {
+		warnf("linkat:succeed to dirlookup for %s\n", newpath);
+		iput(dp);
+		ivalid(nip);
+		iput(nip);
+		return -1;
+	}
+
+	if((ip = dirlookup(dp, oldpath, 0)) == 0) {
+		warnf("linkat:fail to dirlookup for %s\n", oldpath);
+		iput(dp);
+		return -1;
+	}
+
+	ivalid(ip);
+	ip->lc++;
+	iupdate(ip);
+	if(dirlink(dp, newpath, ip->inum) < 0)
+		panic("linkat: dirlink");
+
+	iput(dp);
+	iput(ip);
+	return 0;
+}
+
+int unlinkat(char *path)
+{
+	struct inode *ip, *dp;
+	dp = root_dir();
+	ivalid(dp);
+	if((ip = dirlookup(dp, path, 0)) == 0) {
+		warnf("unlinkat: dirlookup for path(%s)", path);
+		iput(dp);
+		return -1;
+	}
+
+	ivalid(ip);
+	ip->lc--;
+	iupdate(ip);
+	if(dirunlink(dp, path, ip->inum) < 0)
+		panic("unlinkat: dirunlink");
+
+	iput(dp);
+	iput(ip);
+	return 0;
+}

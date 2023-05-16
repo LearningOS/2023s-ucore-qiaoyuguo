@@ -8,6 +8,7 @@
 #define PIPESIZE (512)
 #define FILEPOOLSIZE (NPROC * FD_BUFFER_SIZE)
 
+
 // in-memory copy of an inode,it can be used to quickly locate file entities on disk
 struct inode {
 	uint dev; // Device number
@@ -17,6 +18,7 @@ struct inode {
 	short type; // copy of disk inode
 	uint size;
 	uint addrs[NDIRECT + 1];
+	uint lc; // link count
 	// LAB4: You may need to add link count here
 };
 
@@ -46,5 +48,7 @@ uint64 inodewrite(struct file *, uint64, uint64);
 uint64 inoderead(struct file *, uint64, uint64);
 struct file *stdio_init(int);
 int show_all_files();
+int linkat(char *oldpath, char *newpath);
+int unlinkat(char *path);
 
 #endif // FILE_H

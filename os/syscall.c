@@ -6,6 +6,18 @@
 #include "timer.h"
 #include "trap.h"
 
+//file type
+#define DIR 0x040000
+#define FILE 0x100000
+
+typedef struct Stat{
+	uint64 dev;
+	uint64 ino;
+	uint32 mode;
+	uint32 nlink;
+	uint64 pad[7];
+}Stat;
+
 uint64 console_write(uint64 va, uint64 len)
 {
 	struct proc *p = curr_proc();
@@ -293,22 +305,52 @@ uint64 sys_close(int fd)
 
 int sys_fstat(int fd, uint64 stat)
 {
-	//TODO: your job is to complete the syscall
-	return -1;
+	if (fd < 0 || fd > FD_BUFFER_SIZE)
+		return -1;
+	struct proc *p = curr_proc();
+	struct file *f = p->files[fd];
+	struct Stat cstat;
+
+	if(f->ip == 0) {
+		warnf("fstat: failed to get inode\n");
+		return -1;
+	}
+	memset(&cstat, 0, sizeof(cstat));
+	cstat.dev = f->ip->dev;
+	cstat.ino = f->ip->inum;
+	cstat.nlink = f->ip->lc;
+	cstat.mode = FILE;
+
+	copyout(p->pagetable, stat, (char *)&cstat, sizeof(cstat));
+	return 0;
 }
 
-int sys_linkat(int olddirfd, uint64 oldpath, int newdirfd, uint64 newpath,
+int sys_linkat(int olddirfd, uint64 oldname, int newdirfd, uint64 newname,
 	       uint64 flags)
 {
-	//TODO: your job is to complete the syscall
-	return -1;
+	struct proc *p = curr_proc();
+	char oldpath[200] = "";	
+	copyinstr(p->pagetable, oldpath, oldname, 200);
+	char newpath[200] = "";
+	copyinstr(p->pagetable, newpath, newname, 200);
+
+	if(strncmp(oldpath, newpath, 200) == 0) {
+		warnf("linkat: newpath(%s) is same as oldpath(%s)\n", 
+				newpath, oldpath);
+		return -1;
+	}
+	return linkat(oldpath, newpath);
 }
 
 int sys_unlinkat(int dirfd, uint64 name, uint64 flags)
 {
-	//TODO: your job is to complete the syscall
-	return -1;
+	struct proc *p = curr_proc();
+	char path[200] = "";	
+	copyinstr(p->pagetable, path, name, 200);
+	
+	return unlinkat(path);	
 }
+
 
 uint64 sys_sbrk(int n)
 {
