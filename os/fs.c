@@ -210,7 +210,7 @@ void ivalid(struct inode *ip)
 void iput(struct inode *ip)
 {
 	// LAB4: Unmark the condition and change link count variable name (lc) if needed
-	if (ip->ref == 1 && ip->valid && ip->lc == 0) {
+	if (ip->ref == 1 && ip->valid && 0 && ip->lc == 0) {
 		// inode has no links and no other references: truncate and free.
 		itrunc(ip);
 		ip->type = 0;
@@ -431,16 +431,11 @@ int dirlink(struct inode *dp, char *name, uint inum)
 }
 
 // LAB4: You may want to add dirunlink here
+// Clear a directory entry (name, inum) into the directory dp.
 int dirunlink(struct inode *dp, char *name, uint inum)
 {
 	int off;
 	struct dirent de;
-	struct inode *ip;
-	// Check that name is not present.
-	if ((ip = dirlookup(dp, name, 0)) == 0) {
-		warnf("dirunlink: dirlookup for name(%s) failed\n", name);
-		return -1;
-	}
 
 	// Look for specified dirent.
 	for (off = 0; off < dp->size; off += sizeof(de)) {
@@ -451,7 +446,8 @@ int dirunlink(struct inode *dp, char *name, uint inum)
 	}
 	memset(&de, 0, sizeof(de));
 	if (writei(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
-		panic("dirlink");
+		panic("dirunlink");
+
 	return 0;
 
 }
